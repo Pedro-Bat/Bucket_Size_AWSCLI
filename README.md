@@ -27,3 +27,8 @@ This PowerShell script analyzes the contents of an AWS S3 bucket by listing all 
 - `"s3://bucketname"` with the actual name of your bucket.
 4. Run the script in PowerShell:
 
+---
+#Saída | Output
+![{AB633A55-4154-4AB6-816B-5F87D1F21AB0}](https://github.com/user-attachments/assets/95dc3ac8-826a-4853-abc0-fda82d331e89)
+
+
