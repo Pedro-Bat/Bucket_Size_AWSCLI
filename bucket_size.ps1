@@ -1,9 +1,29 @@
-# Cria diretório se não existir
-if (!(Test-Path "PATH")) {
-    New-Item -Path "PATH" -ItemType Directory | Out-Null
+$LogFile = "PATH_LOG$(Get-Date -Format 'yyyyMMdd').log"
+$Global:LogLevel = "INFO"  # DEBUG, INFO, WARN, ERROR
+
+function Write-Log {
+    param (
+        [string]$Message,
+        [string]$Level = "INFO",
+        [string]$LogFile = "C:\temp\test.log"
+    )
+
+    $logLevels = @{ "DEBUG" = 0; "INFO" = 1; "WARN" = 2; "ERROR" = 3 }
+    if ($logLevels[$Level] -lt $logLevels[$Global:LogLevel]) { return }
+
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    $logEntry = "$timestamp [$Level] $Message"
+    Write-Output $logEntry
+    Add-Content -Path $LogFile -Value $logEntry
 }
 
-# Função para formatar tamanhos de arquivo
+# Create directory if it doesn't exist
+if (!(Test-Path "PATH")) {
+    New-Item -Path "PATH" -ItemType Directory | Out-Null
+    Write-Log -Message "Directory PATH CREATED"
+}
+
+# Function to format file sizes
 function Format-FileSize {
     param ([long]$size)
 
@@ -14,30 +34,30 @@ function Format-FileSize {
     else { return "$size B" }
 }
 
+# Run AWS CLI command
+Write-Log -Message "Fetching AWS directory list"
+$output = aws s3 ls "s3://ofsa-datalake/Vexpenses" --recursive
 
-# Executa o comando AWS CLI -- Cuidado caso tente fazer numa pasta com nome parecido ex: teste/ teste_new/ só que sem a barra '/' pois o parametro recursive meio que coloca um * na consulta
-# então a consulta do teste/ também vai trazer o teste_new ai para não ter isso coloque sempre a barra no final
+Write-Log -Message "Starting Table Processing"
+# Processing date
+$processingDate = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
 
-$output = aws s3 ls "s3://bucketname" --recursive
-
-# Data de processamento
-$dataProcessamento = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-
-# Lista otimizada para armazenar os dados
+# Optimized list to store the data
 $results = New-Object 'System.Collections.Generic.List[object]'
 
-# Processa cada linha da saída
+# Process each output line
 $output | ForEach-Object {
     if ($_ -match '^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\s+(\d+)\s+(.*)$') {
         $results.Add([PSCustomObject]@{
             Path = $matches[3]
             FileDate = $matches[1]
             SizeBytes = [long]$matches[2]
+            PROCESSING_DATE = $processingDate
         })
     }
 }
 
-# Agrupa por pasta e calcula os totais
+# Group by folder and calculate totals
 $folderStats = $results | Group-Object {
     if ($_.Path -match '^(.*/)[^/]+$') { $matches[1] } else { $_.Path }
 } | ForEach-Object {
@@ -52,33 +72,37 @@ $folderStats = $results | Group-Object {
         TotalSizeTB = [math]::Round($totalBytes / 1TB, 2)
         TotalSizeFormatted = (Format-FileSize $totalBytes)
         FileCount = $_.Count
-        DATA_PROCESSAMENTO = $dataProcessamento
+        PROCESSING_DATE = $processingDate
     }
 }
 
-# Calcula o total geral
-$totalGeral = $results | Measure-Object -Property SizeBytes -Sum | Select-Object -ExpandProperty Sum
+# Calculate overall total
+$overallTotal = $results | Measure-Object -Property SizeBytes -Sum | Select-Object -ExpandProperty Sum
 
-# Cria linha de total geral
+# Create overall total row
 $totalRow = [PSCustomObject]@{
-    DATA_PROCESSAMENTO = $dataProcessamento
-    FolderPath = "TOTAL GERAL"
-    TotalSizeBytes = $totalGeral
-    TotalSizeKB = [math]::Round($totalGeral / 1KB, 2)
-    TotalSizeMB = [math]::Round($totalGeral / 1MB, 2)
-    TotalSizeGB = [math]::Round($totalGeral / 1GB, 2)
-    TotalSizeTB = [math]::Round($totalGeral / 1TB, 2)
-    TotalSizeFormatted = (Format-FileSize $totalGeral)
+    PROCESSING_DATE = $processingDate
+    FolderPath = "OVERALL TOTAL"
+    TotalSizeBytes = $overallTotal
+    TotalSizeKB = [math]::Round($overallTotal / 1KB, 2)
+    TotalSizeMB = [math]::Round($overallTotal / 1MB, 2)
+    TotalSizeGB = [math]::Round($overallTotal / 1GB, 2)
+    TotalSizeTB = [math]::Round($overallTotal / 1TB, 2)
+    TotalSizeFormatted = (Format-FileSize $overallTotal)
     FileCount = $results.Count
 }
 
-# Prepara os dados para exportação
+# Prepare data for export
 $exportData = @($totalRow) + $folderStats
 
-# Exporta para CSV
+# Export to CSV
 $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
-$csvPath = "PATH"
+$csvPath = "C:\talendTemp\DATALAKE_SIZE\datalake_$timestamp.csv"
 
 $exportData |
-    Select-Object DATA_PROCESSAMENTO, FolderPath, TotalSizeBytes, TotalSizeKB, TotalSizeMB, TotalSizeGB, TotalSizeTB, TotalSizeFormatted, FileCount |
+    Select-Object PROCESSING_DATE, FolderPath, TotalSizeBytes, TotalSizeKB, TotalSizeMB, TotalSizeGB, TotalSizeTB, TotalSizeFormatted, FileCount |
     Export-Csv -Path $csvPath -NoTypeInformation -Encoding UTF8
+
+# Show summary
+Write-Log "Report generated at: $csvPath"
+Write-Log "Overall total: $($totalRow.TotalSizeFormatted) ($($totalRow.FileCount) files)"
