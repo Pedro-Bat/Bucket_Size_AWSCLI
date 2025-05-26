@@ -29,6 +29,7 @@ This PowerShell script analyzes the contents of an AWS S3 bucket by listing all 
 
 ---
 #Saída | Output
-![{AB633A55-4154-4AB6-816B-5F87D1F21AB0}](https://github.com/user-attachments/assets/95dc3ac8-826a-4853-abc0-fda82d331e89)
+![{68645C66-52BF-44C0-995F-9134BA134F72}](https://github.com/user-attachments/assets/4c1e4046-c4ba-4a4b-9a0e-ad95e3eb848e)
+
 
 
