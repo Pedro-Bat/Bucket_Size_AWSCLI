@@ -36,7 +36,7 @@ function Format-FileSize {
 
 # Run AWS CLI command
 Write-Log -Message "Fetching AWS directory list"
-$output = aws s3 ls "s3://ofsa-datalake/Vexpenses" --recursive
+$output = aws s3 ls "s3://bucketname/financeiro" --recursive
 
 Write-Log -Message "Starting Table Processing"
 # Processing date
